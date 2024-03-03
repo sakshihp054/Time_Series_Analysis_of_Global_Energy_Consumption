@@ -1,0 +1,334 @@
+---
+title: "Sakshi_31A_Project_2_Time Series Analysis of Global Energy Consumption"
+output: html_notebook
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+**Introduction:**
+
+This data contains the Monthly data of energy Production, Consumption,
+Imports, Exports, Stock exchanges and production and consumption from
+different resources like renewables, nuclear and fossil fuels from 1973
+to 2022.
+
+Data was collected from the website: U.S. Energy Information
+Administration. All the information is in the Quadrillion British
+Thermal Unit
+
+**Objective:**
+
+To predict the future global energy consumption via primary source of
+energy based on past energy consumption trends.
+
+# Forecast using ARIMA Method:
+
+```{r}
+library(flexdashboard)
+library(tidyverse)
+library(shiny)
+library(DT)
+library(forecast)
+library(quantmod)
+library(tseries)
+library(tsibble)
+library(feasts)
+library(rugarch)
+library(FinTS)
+```
+
+# Loanding and cleaning of data
+
+```{r}
+mydata <- read.csv("D:/IIFT Trimester 3/RTSM_Project_2/Data/World Energy Overview.csv")
+
+x <- as.Date(mydata$Date, '%d-%m-%Y')
+year <- as.numeric(format(x,'%Y'))
+month <- as.numeric(format(x,'%m'))
+day <- as.numeric(format(x,'%d'))
+
+mydata2 <- cbind(mydata,year,month,day)
+View(mydata2)
+```
+
+# Total Energy Consumption over years
+
+```{r}
+plot(mydata2$year, mydata2$Total.Primary.Energy.Consumption,type='l',xlab='Year',ylab = 'Consumption',
+     lty=2,xlim = c(1980,2021), ylim=c(5,10))
+```
+
+# Decomposition of data for Total Energy Consumption
+
+```{r}
+x1 = ts(mydata2$Total.Primary.Energy.Consumption, start=c(1980, 5), freq= 12)
+
+tsr = decompose(x1) # tsr : Trend | Seasonality | Randomness
+plot(tsr)
+```
+
+# ADF Test: Total Consumption over years:
+
+**Objective:** To check if the data is stationary or not
+
+```{r}
+
+summary(mydata2$Total.Primary.Energy.Consumption)
+adf.test(mydata2$Total.Primary.Energy.Consumption) # Time series is stationary
+
+```
+
+**Analysis:**
+
+Method: Augmented Dicky Fuller Test for stationarity Null Hypothesis:
+Data is not stationary Alternate Hypothesis: Data is stationary
+
+here, p-value: 0.01 \< 0.05 hence we reject the null hypothesis
+
+**Conclusion:** Data is stationary
+
+**Implication:** Since, data is stationary we can move ahead for time
+series analysis.
+
+# Ljung-Box Test: Consumption over Years
+
+**Objective:** To check whether data is auto-correlated or not
+
+```{r}
+lb_test_wn = Box.test(mydata2$Total.Primary.Energy.Consumption)
+lb_test_wn # Time-series is auto-correlated
+
+```
+
+**Analysis:**
+
+Method: Ljung-Box test for autocorrelation Null Hypothesis: Time series
+data is not auto-correlated Alternate Hypothesis: Time series data is
+auto-correlated
+
+here, p-value= 2.2e-16 \< 0.05 hence, we reject the null hypothesis
+
+**Conclusion:** Times series data is auto-correlated
+
+**Implication:** since data is auto-correlated, we can go for
+time-series analysis of data instead of regression
+
+# ACF and PACF plots for Total Energy Consumption
+
+**Objective:** To identify and quantify the autocorrelation patterns in
+a time series, assisting in the selection of appropriate models for time
+series analysis and forecasting.
+
+```{r}
+acf(mydata2$Total.Primary.Energy.Consumption)
+pacf(mydata2$Total.Primary.Energy.Consumption)
+```
+
+**Analysis:**
+
+ACF:
+
+The ACF appears to show a trend of increasing correlation as the lag
+increases. This means that the total primary energy consumption in a
+given year is positively correlated with the consumption in previous
+years.
+
+PACF:
+
+Lag 1: The PACF value is close to 0, indicating that there is no
+significant correlation between the total primary energy consumption in
+a given year and the consumption in the previous year, after accounting
+for the trend.
+
+Lag 2 and beyond: The PACF values are close to 0, suggesting that there
+is no significant correlation between the total primary energy
+consumption in a given year and the consumption in years further in the
+past, after accounting for the trend and the previous year's
+consumption.
+
+**Implication:**
+
+PACF plot suggests that the total primary energy consumption in a given
+year is not significantly related to the consumption in previous years,
+after considering the trend and the influence of the previous year's
+consumption. This is in contrast to the ACF plot, which showed a
+positive correlation at all lags.
+
+# ARIMA Model
+
+**Objective:** To determine the appropriate orders of autoregressive
+(AR) and moving average (MA) components and to find out how closely
+related manual and auto-ARIMA models are.
+
+```{r}
+x1 = ts(mydata2$Total.Primary.Energy.Consumption, start=c(1980, 5), freq= 12)
+newData <- diff(x1)
+# ARIMA (1, 0, 0) or AR(1)
+ar1 = arima(x1, order = c(1, 0, 0)); ar1
+
+# ARIMA (2, 0, 0) or AR(2)
+ar2 = arima(x1, order = c(2, 0, 0)); ar2
+
+# ARIMA (0, 0 , 1) or MA(1)
+ma1 = arima(x1, order = c(0, 0, 1)); ma1
+
+# ARIMA (0, 0, 2) or MA(2)
+ma2 = arima(x1, order = c(0, 0, 2)); ma2
+
+# ARIMA (0, 0, 3) or MA(3)
+ma3 = arima(x1, order = c(0, 0, 3)); ma3
+
+# ARIMA (0, 0, 4) or MA(4)
+ma4 = arima(x1, order = c(0, 0, 4)); ma4
+
+# ARIMA (1, 0, 1) or ARMA(1, 1)
+arma11 = arima(x1, order = c(1, 0, 1)); arma11
+
+# ARIMA (1, 0, 2) or ARMA(1, 2)
+arma12 = arima(x1, order = c(1, 0, 2)); arma12
+
+# ARIMA (1, 0, 3) or ARMA(1, 3)
+arma13 = arima(x1, order = c(1, 0, 3)); arma13
+
+# Auto ARIMA
+arma_pq_consumption_ds = auto.arima(x1); arma_pq_consumption_ds
+
+```
+
+**Analysis:**
+
+The positive AR coefficient suggests a positive autocorrelation,
+indicating a trend. The negative MA coefficients suggest a corrective
+effect, dampening the impact of past forecast errors. The negative
+seasonal AR and MA coefficients indicate a seasonally adjusted model.
+
+**Implication:**
+
+The ARIMA model with the provided coefficients and statistics seems to
+capture autocorrelation, seasonality, and a linear trend. The model fit
+and goodness-of-fit criteria (AIC, AICc, BIC) suggest that this model
+provides a reasonable balance between explanatory power and complexity.
+
+The lowest AIC by manual ARIMA method is for order (1,0,0) and (1,0,2)
+The auto-ARIMA model also suggests the order (1,0,2) and (2,1,1) for
+seasonality. Hence manual and auto ARIMA models give nealr same order.
+
+# Forecasting with ARIMA model
+
+**Objective:** To forecast the future global energy consumption based on
+past consumption
+
+```{r}
+# Ljung-Box Test for Autocorrelation - Model Residuals
+# ****************************************************
+lb_test_arma_pq_jj_ds = Box.test(arma_pq_consumption_ds$residuals); lb_test_arma_pq_jj_ds
+# It is not autocorrelated
+
+# 3.1.2. Forecasting with ARIMA Models
+# ************************************
+jj_ds_fpq = forecast(arma_pq_consumption_ds, h = 100)
+plot(jj_ds_fpq)
+
+```
+
+**Analysis:**
+
+Method: Ljung-Box test for autocorrelation Null Hypothesis: Time series
+data residual is not auto-correlated Alternate Hypothesis: Time series
+data residual is auto-correlated
+
+here, p-value= 0.9468 \> 0.05 hence, we do not reject the null
+hypothesis
+
+**Conclusion:**
+
+Residual is not auto correlated.
+
+**Implication:**
+
+Model forecasted the data for next 100 time points
+
+# ARCH-LM Test for residual
+
+**Objective:** To find out whether there is heteroskedaskity is there in
+residual or not
+
+```{r}
+ts_data <- ts(mydata$Total.Primary.Energy.Consumption, frequency = 12)
+
+nse_ret_arch_test = ArchTest(arma_pq_consumption_ds$residuals, lags = 20) # H0: No ARCH Effects
+nse_ret_arch_test
+```
+
+**Analysis:**
+
+Method: ARCH-LM Test Null Hypothesis: There is no evidence of
+conditional heteroskedasticity in the time series residual. Alternate
+Hypothesis: There is evidence of heteroskedasticity
+
+here, p-value = 2.2e-16 \< 0.05 Hence we reject the null hypothesis
+
+**Conclusion:** There is heteroskedasticity in the residual of model
+
+**Implication:**
+
+The result implies that the conditional variance of the time series
+residual is not constant over time; instead, it exhibits autoregressive
+conditional heteroskedasticity.This may suggest that the volatility of
+the residual of series is not constant, and there are periods of high
+and low volatility.
+
+Hence we go for GARCH model
+
+# GARCH Model
+
+```{r}
+garch_model1 = ugarchspec(variance.model = list(model = 'sGARCH', garchOrder = c(1,1)), mean.model = list(armaOrder = c(1,2), include.mean = TRUE))
+nse_ret_garch1 = ugarchfit(garch_model1, data = arma_pq_consumption_ds$residuals); nse_ret_garch1
+```
+
+**Analysis:**
+
+Method: ARCH-LM Test Null Hypothesis: There is no evidence of
+conditional heteroskedasticity in the time series residual. Alternate
+Hypothesis: There is evidence of heteroskedasticity
+
+p-value \> 0.05 for ARMA order of (1,2) for group of 30
+
+**Conclusion:**
+
+There is no heteroskedasticity in the residual of model for ARMA order
+of (1,2) and group of 30
+
+# GARCH Forecast
+
+**Objective:** To forecast volatility using the fitted GARCH model for
+the next 30 time points. Analysis: Used the 'ugarchforecast' function to
+generate volatility forecasts for the next 30 time points.
+
+```{r}
+stk_ret_garch_forecast1 = ugarchforecast(nse_ret_garch1, n.ahead = 30); stk_ret_garch_forecast1
+
+```
+
+Results:
+
+GARCH Model Forecast: - Model: sGARCH - Horizon: 30 - Roll Steps: 0 -
+Out of Sample: 0
+
+0-roll forecast [T0=Mar 2030]: - Forecasted Series: - T+1 to T+30:
+Contains forecasted values of volatility (Sigma) for each time point.
+
+Implication:
+
+The forecasted values represent the predicted volatility for the next 30
+time points based on the fitted GARCH model. These forecasts can be
+useful for operations management and decision-making, providing insights
+into the expected future volatility of the consumption time series.
+
+# GARCH Forecast Plot
+
+```{r}
+plot(stk_ret_garch_forecast1)
+```

@@ -1,0 +1,176 @@
+---
+title: "Time Series Analysis of Global Energy Consumption"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+```{r setup, include=FALSE}
+library(flexdashboard)
+library(tidyverse)
+library(shiny)
+library(DT)
+library(forecast)
+library(quantmod)
+library(tseries)
+library(tsibble)
+library(feasts)
+library(rugarch)
+library(FinTS)
+```
+
+```{r}
+mydata <- read.csv("D:/IIFT Trimester 3/RTSM_Project_2/Data/World Energy Overview.csv")
+x <- as.Date(mydata$Date, '%d-%m-%Y')
+year <- as.numeric(format(x,'%Y'))
+month <- as.numeric(format(x,'%m'))
+day <- as.numeric(format(x,'%d'))
+mydata2 <- cbind(mydata,year,month,day)
+View(mydata2)
+```
+```{r}
+
+```
+
+##  {.tabset}
+
+### Introduction {.tabset}
+
+```{r}
+p("About:")
+    p("This data contains the Monthly data of energy Production, Consumption, Imports, Exports, Stock exchanges and production and consumption from different resources like renewables, nuclear and fossil fuels from 1973 to 2022.")
+    p("Data Source: [Kaggle](https://www.kaggle.com/datasets/akhiljethwa/world-energy-statistics)")
+    p("Data was collected from the website: U.S. Energy Information Administration. All the information is in the Quadrillion British Thermal Unit")
+    p("Also, there are parameters like Date,Total Fossil Fuels Production,Nuclear Electric Power Production,Total Renewable Energy Production,Total Primary Energy Production,Primary Energy Imports,Primary Energy Exports,Primary Energy Net Imports,Primary Energy Stock Change and Other,Total Fossil Fuels Consumption,Nuclear Electric Power Consumption,Total Renewable Energy Consumption,Total Primary Energy Consumption")
+    img(src = "D:/IIFT Trimester 3/RTSM/ecommerce_img.jpg", width = "500px", height = "500px", alt = "ecommerce_img")
+
+```
+
+### About the Data {.tabset}
+```{r}
+p("Data Contains below columns and data-types:")
+# Read data from Excel file
+excel_data <- readxl::read_excel("D:/IIFT Trimester 3/RTSM/Data_Information.xlsx")
+# Display data table
+datatable(excel_data)
+```
+
+### Decomposition of data for Total Energy Consumption
+```{r}
+
+x1 = ts(mydata2$Total.Primary.Energy.Consumption, start=c(1980, 5), freq= 12)
+
+ggseasonplot(x1, year.labels = TRUE, year.labels.left = TRUE) + ylab("Consumption") + 
+  xlab("Years") + ggtitle("Seasonal Plot: Total Energy Consumption")
+
+ggsubseriesplot(x1) + ylab("Consumption") + ggtitle("Seasonal subseries plot: Total Energy Consumption")
+
+tsr = decompose(x1) # tsr : Trend | Seasonality | Randomness
+plot(tsr)
+
+```
+
+### ADF Test: Total Consumption over years {.tabset}
+```{r}
+summary(mydata2$Total.Primary.Energy.Consumption)
+adf.test(mydata2$Total.Primary.Energy.Consumption) # Time series is stationary
+
+```
+
+### Ljung-Box Test: Consumption over Years
+```{r}
+lb_test_wn = Box.test(mydata2$Total.Primary.Energy.Consumption)
+lb_test_wn # Time-series is autocorrelated
+
+```
+
+### Total Energy Consumption over years
+```{r}
+plot(mydata2$year, mydata2$Total.Primary.Energy.Consumption,type='l',xlab='Year',ylab = 'Consumption',
+     lty=2,xlim = c(1980,2021), ylim=c(5,10))
+
+```
+
+### ACF and PACF plots for Total Energy Consumption
+```{r}
+# Assuming your time series data is in a data frame called 'df'
+acf(mydata2$Total.Primary.Energy.Consumption)
+pacf(mydata2$Total.Primary.Energy.Consumption)
+
+```
+
+### ARIMA Model
+```{r}
+x1 = ts(mydata2$Total.Primary.Energy.Consumption, start=c(1980, 5), freq= 12)
+newData <- diff(x1)
+# ARIMA (1, 0, 0) or AR(1)
+ar1 = arima(x1, order = c(1, 0, 0)); ar1
+
+# ARIMA (2, 0, 0) or AR(2)
+ar2 = arima(x1, order = c(2, 0, 0)); ar2
+
+# ARIMA (0, 0 , 1) or MA(1)
+ma1 = arima(x1, order = c(0, 0, 1)); ma1
+
+# ARIMA (0, 0, 2) or MA(2)
+ma2 = arima(x1, order = c(0, 0, 2)); ma2
+
+# ARIMA (0, 0, 3) or MA(3)
+ma3 = arima(x1, order = c(0, 0, 3)); ma3
+
+# ARIMA (0, 0, 4) or MA(4)
+ma4 = arima(x1, order = c(0, 0, 4)); ma4
+
+# ARIMA (1, 0, 1) or ARMA(1, 1)
+arma11 = arima(x1, order = c(1, 0, 1)); arma11
+
+# ARIMA (1, 0, 2) or ARMA(1, 2)
+arma12 = arima(x1, order = c(1, 0, 2)); arma12
+
+# ARIMA (1, 0, 3) or ARMA(1, 3)
+arma13 = arima(x1, order = c(1, 0, 3)); arma13
+
+# Auto ARIMA
+arma_pq_consumption_ds = auto.arima(x1); arma_pq_consumption_ds
+
+```
+
+### Forecasting with ARIMA model
+```{r}
+# Ljung-Box Test for Autocorrelation - Model Residuals
+# ****************************************************
+lb_test_arma_pq_jj_ds = Box.test(arma_pq_consumption_ds$residuals); lb_test_arma_pq_jj_ds
+# It is not autocorrelated
+
+# 3.1.2. Forecasting with ARIMA Models
+# ************************************
+jj_ds_fpq = forecast(arma_pq_consumption_ds, h = 40)
+plot(jj_ds_fpq)
+
+jj_fpq = forecast(arma_pq_consumption_ds, h = 40)
+plot(jj_fpq)
+
+```
+
+### ARCH-LM Test
+```{r}
+ts_data <- ts(mydata$Total.Primary.Energy.Consumption, frequency = 12)
+
+nse_ret_arch_test = ArchTest(ts_data, lags = 20) # H0: No ARCH Effects
+nse_ret_arch_test
+```
+
+### GARCH-LM Model
+```{r}
+garch_model1 = ugarchspec(variance.model = list(model = 'sGARCH', garchOrder = c(1,1)), mean.model = list(armaOrder = c(1,2), include.mean = TRUE))
+nse_ret_garch1 = ugarchfit(garch_model1, data = ts_data); nse_ret_garch1
+
+```
+
+### GARCH Forecast Model
+```{r}
+stk_ret_garch_forecast1 = ugarchforecast(nse_ret_garch1, n.ahead = 30); stk_ret_garch_forecast1
+
+```
+
